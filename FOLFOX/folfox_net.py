@@ -42,16 +42,15 @@ folfox_data_y = np.array(map(split_y,folfox_data_y))
 #PARAMETERS#
 ############
 
-training_pct = 70
+training_pct = 75
 hidden_units1 = 500
-hidden_units2 = 200
-input_keep = .01
+hidden_units2 = 50
+input_keep = .1
 hidden_keep = .5
-threshold = .5
-lr = .1
+lr = .005
 rho = .9
-steps = 50
-batch = 20
+steps = 51
+batch = 25
 
 ##############
 #ARCHITECTURE#
