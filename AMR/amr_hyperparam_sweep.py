@@ -13,10 +13,10 @@ hidden_units_grid = [16, 64, 256, 1024, 4096]
 input_keep_grid = [.01, .1, .25, .5, .75] 
 hidden_keep_grid = [.01, .1, .25, .5, .75]
 lr_grid = [.0001, .001, .01, .1, 1]
-rho_grid = [.1, .3, .5, .7, .9]
+beta_grid = [.1, .3, .5, .7, .9]
 feature_grid = [100, 1000, 10000, 100000, 524684]
 
-hyperparameter_grid = [hidden_units_grid, input_keep_grid, hidden_keep_grid, lr_grid, rho_grid, feature_grid]
+hyperparameter_grid = [hidden_units_grid, input_keep_grid, hidden_keep_grid, lr_grid, beta_grid, feature_grid]
 hyperparameter_list = list(itertools.product(*hyperparameter_grid))
 
 def main_star(hyperparams):	#pool.map does not support * operator

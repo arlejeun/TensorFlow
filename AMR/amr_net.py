@@ -11,9 +11,9 @@ import tensorflow as tf
 ############
 
 training_pct = 75
-steps = 201
+steps = 101
 
-def main(hidden_units, input_keep, hidden_keep, lr, rho, features):
+def main(hidden_units, input_keep, hidden_keep, lr, beta1, features):
 
     #######
     #SETUP#
@@ -69,7 +69,7 @@ def main(hidden_units, input_keep, hidden_keep, lr, rho, features):
     py_x = model(X, w_h, w_o, p_keep_input, p_keep_hidden)
 
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(py_x, Y))
-    train_op = tf.train.RMSPropOptimizer(lr, rho).minimize(cost)
+    train_op = tf.train.AdamOptimizer(lr, beta1).minimize(cost)
     predict_op = tf.argmax(py_x, 1)
 
     #############
@@ -145,7 +145,7 @@ def main(hidden_units, input_keep, hidden_keep, lr, rho, features):
             'IK':input_keep, 
             'HK':hidden_keep, 
             'LR':lr, 
-            'RHO':rho,
+            'Beta':beta1,
             'feature_count':features
             }
 
