@@ -10,14 +10,13 @@ from scipy.stats import pearsonr
 #PARAMETERS#
 ############
 
-hidden_units = 2500
-hidden_units2 = 1000
+hidden_units = 1000
+hidden_units2 = 200
 hidden_keep = .1
-input_keep = .8
+input_keep = 1
 lr = .001
-beta1 = .9
-beta2 = .95
-steps = 200
+rho = .7
+steps = 250
 
 #######
 #SETUP#
@@ -26,7 +25,13 @@ steps = 200
 #Load data
 madness_data = 'madness_avg.csv'
 madness = pd.read_csv(madness_data)
-#print madness.corr()
+
+# #Correlations
+# cor = madness.corr().abs()
+# print cor
+# s = cor.unstack()['Performance']
+# so = s.sort_values(ascending=False)
+# print so
 
 #Train on every year but one, and predict that year
 prediction_year = 2015
@@ -43,7 +48,7 @@ test_snake = teX['Snake']
 trX = preprocessing.scale(trX)
 teX = preprocessing.scale(teX)
 
-feature_cols = 30
+feature_cols = 36
 output_vals = 1
 
 ##############
@@ -77,7 +82,9 @@ w_o =  init_weights([hidden_units2, output_vals])
 py_x = model(X, w_h, w_h2, w_o, p_keep_input, p_keep_hidden)
 
 cost = tf.nn.l2_loss(tf.sub(Y,py_x))
-train_op = tf.train.AdamOptimizer(lr, beta1, beta2).minimize(cost)
+#train_op = tf.train.AdamOptimizer(lr, beta1, beta2).minimize(cost)
+#train_op = tf.train.FtrlOptimizer(lr).minimize(cost)
+train_op = tf.train.RMSPropOptimizer(lr,rho).minimize(cost)
 
 init = tf.initialize_all_variables()
 sess = tf.Session(
@@ -142,5 +149,10 @@ print "(Snake, Team, Model, Real, ModelPred)", sorted_by_prediction[::-1]
 
 print "Snake baseline score: ", score_bracket(sorted_by_snake)
 print "Neural net score: ", score_bracket(sorted_by_prediction)
+
+output = sorted(map(lambda x :(x[0],x[1],x[2][0],x[3][0]),zip(test_snake,test_teams,predictions,teY)), key=lambda x:x[2], reverse=True)
+print "Raw Output"
+for o in output:
+    print o
 
 sess.close()

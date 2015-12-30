@@ -2,4 +2,5 @@ NCAA stats - http://web1.ncaa.org/stats/StatsSrv/rankings?doWhat=archive&rpt=arc
 
 ESPN stats - http://espn.go.com/mens-college-basketball/rankings
 
+http://espn.go.com/mens-college-basketball/rpi/_/year/2015/sort/lrpi
 http://espn.go.com/mens-college-basketball/bpi

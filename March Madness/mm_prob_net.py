@@ -11,13 +11,12 @@ from scipy.stats import pearsonr
 ############
 
 hidden_units = 1000
-hidden_units2 = 2000
+hidden_units2 = 200
 hidden_keep = .1
-input_keep = .8
+input_keep = 1
 lr = .001
-beta1 = .9
-beta2 = .95
-steps = 100
+rho = .7
+steps = 250
 
 #######
 #SETUP#
@@ -26,10 +25,16 @@ steps = 100
 #Load data
 madness_data = 'madness_avg.csv'
 madness = pd.read_csv(madness_data)
-#print madness.corr()
+
+# #Correlations
+# cor = madness.corr().abs()
+# print cor
+# s = cor.unstack()['Performance']
+# so = s.sort_values(ascending=False)
+# print so
 
 #Train on every year but one, and predict that year
-prediction_year = 2012
+prediction_year = 2015
 prior_year_mask = madness['Year'] != prediction_year
 trX, teX = madness[prior_year_mask], madness[~prior_year_mask]
 
@@ -57,7 +62,7 @@ test_snake = teX['Snake']
 trX = preprocessing.scale(trX)
 teX = preprocessing.scale(teX)
 
-feature_cols = 30
+feature_cols = 36
 output_vals = 4
 
 ##############
@@ -92,7 +97,9 @@ py_x = model(X, w_h, w_h2, w_o, p_keep_input, p_keep_hidden)
 
 cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(py_x,Y))
 predict_op = tf.nn.softmax(py_x)
-train_op = tf.train.AdamOptimizer(lr, beta1, beta2).minimize(cost)
+#train_op = tf.train.AdamOptimizer(lr, beta1, beta2).minimize(cost)
+#train_op = tf.train.FtrlOptimizer(lr).minimize(cost)
+train_op = tf.train.RMSPropOptimizer(lr,rho).minimize(cost)
 
 init = tf.initialize_all_variables()
 sess = tf.Session(
@@ -144,7 +151,7 @@ def score_bracket(zipped):
 predictions = sess.run(predict_op,feed_dict={X:teX,p_keep_input: 1.0, p_keep_hidden: 1.0})
 
 #A zipped tuple has (Snake, Team, Model, Real)
-average_round = [2,3,4,6]
+average_round = [2,3,4,5.875]
 zipped = map(lambda x :(x[0],x[1],sum([average_round[i]*y for i,y in enumerate(x[2])]),x[3]),zip(test_snake,test_teams,predictions,test_perf))
 
 sorted_by_prediction = sorted(zipped, key=lambda x:x[2])
@@ -152,6 +159,8 @@ sorted_by_snake = sorted(zipped, key=lambda x:x[0],reverse=True)
 
 sorted_by_prediction = assign_points(sorted_by_prediction)
 sorted_by_snake = assign_points(sorted_by_snake)
+
+print predictions.sum(axis=0)
 
 print "(Snake, Team, Model, Real, SnakePred)", sorted_by_snake[::-1]
 print "(Snake, Team, Model, Real, ModelPred)", sorted_by_prediction[::-1]
