@@ -11,14 +11,13 @@ from scipy.stats import pearsonr
 ############
 
 hidden_units = 1000
-hidden_units2 = 5000
-hidden_units3 = 500
-hidden_keep = .2
+hidden_units2 = 2000
+hidden_keep = .1
 input_keep = .8
 lr = .001
 beta1 = .9
 beta2 = .95
-steps = 200
+steps = 100
 
 #######
 #SETUP#
@@ -30,7 +29,7 @@ madness = pd.read_csv(madness_data)
 #print madness.corr()
 
 #Train on every year but one, and predict that year
-prediction_year = 2015
+prediction_year = 2012
 prior_year_mask = madness['Year'] != prediction_year
 trX, teX = madness[prior_year_mask], madness[~prior_year_mask]
 
@@ -39,12 +38,11 @@ trX, teX = madness[prior_year_mask], madness[~prior_year_mask]
 #Splitting into all eight wasn't working, likely because we'd overfit champion predictions
 #Hopefully clumping final four contenders together will address this
 def split_y(y):
-    split = [0]*5
+    split = [0]*4
     if y==1 or y==2: split[0] = 1       #One and done - 36 Teams per year
     elif y==3: split[1] = 1             #Thirty-two - 16 Teams per year
     elif y==4: split[2] = 1             #Sweet Sixteen - 8 Teams per year
-    elif y==5: split[3] = 1             #Elite Eight - 4 Teams per year
-    else: split[4] = 1                  #Final Four - 4 Teams per year
+    else: split[3] = 1                  #Elite Eight - 8 Teams per year
     return split
 
 train_perf, test_perf = trX.pop('Performance'), teX.pop('Performance')
@@ -60,7 +58,7 @@ trX = preprocessing.scale(trX)
 teX = preprocessing.scale(teX)
 
 feature_cols = 30
-output_vals = 5
+output_vals = 4
 
 ##############
 #ARCHITECTURE#
@@ -69,7 +67,7 @@ output_vals = 5
 def init_weights(shape):
     return tf.Variable(tf.random_normal(shape) * 1./sqrt(shape[0]))
 
-def model(X, w_h, w_h2, w_h3, w_o, p_drop_input, p_drop_hidden):
+def model(X, w_h, w_h2, w_o, p_drop_input, p_drop_hidden):
     X = tf.nn.dropout(X, p_drop_input)
     h = tf.nn.relu(tf.matmul(X, w_h))
 
@@ -77,11 +75,8 @@ def model(X, w_h, w_h2, w_h3, w_o, p_drop_input, p_drop_hidden):
     h2 = tf.nn.relu(tf.matmul(h, w_h2))
 
     h2 = tf.nn.dropout(h2, p_drop_hidden)
-    h3 = tf.nn.relu(tf.matmul(h2, w_h3))
 
-    h3 = tf.nn.dropout(h3, p_drop_hidden)
-
-    return tf.matmul(h3, w_o)
+    return tf.matmul(h2, w_o)
 
 X = tf.placeholder("float", [None, feature_cols])
 Y = tf.placeholder("float", [None, output_vals])
@@ -91,10 +86,9 @@ p_keep_hidden = tf.placeholder("float")
 
 w_h =  init_weights([feature_cols, hidden_units])
 w_h2 = init_weights([hidden_units, hidden_units2])
-w_h3 = init_weights([hidden_units2, hidden_units3])
-w_o =  init_weights([hidden_units3, output_vals])
+w_o =  init_weights([hidden_units2, output_vals])
 
-py_x = model(X, w_h, w_h2, w_h3, w_o, p_keep_input, p_keep_hidden)
+py_x = model(X, w_h, w_h2, w_o, p_keep_input, p_keep_hidden)
 
 cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(py_x,Y))
 predict_op = tf.nn.softmax(py_x)
@@ -150,7 +144,7 @@ def score_bracket(zipped):
 predictions = sess.run(predict_op,feed_dict={X:teX,p_keep_input: 1.0, p_keep_hidden: 1.0})
 
 #A zipped tuple has (Snake, Team, Model, Real)
-average_round = [2,3,4,5,7]
+average_round = [2,3,4,6]
 zipped = map(lambda x :(x[0],x[1],sum([average_round[i]*y for i,y in enumerate(x[2])]),x[3]),zip(test_snake,test_teams,predictions,test_perf))
 
 sorted_by_prediction = sorted(zipped, key=lambda x:x[2])
@@ -164,5 +158,10 @@ print "(Snake, Team, Model, Real, ModelPred)", sorted_by_prediction[::-1]
 
 print "Snake baseline score: ", score_bracket(sorted_by_snake)
 print "Neural net score: ", score_bracket(sorted_by_prediction)
+
+output = sorted(map(lambda x :(x[0],x[1],list(x[2]),x[3]),zip(test_snake,test_teams,predictions,test_perf)), key=lambda x:x[2][-1], reverse=True)
+print "Raw Output"
+for o in output:
+    print o
 
 sess.close()
