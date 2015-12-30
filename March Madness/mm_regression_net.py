@@ -10,10 +10,10 @@ from scipy.stats import pearsonr
 #PARAMETERS#
 ############
 
-hidden_units = 5000
+hidden_units = 2500
 hidden_units2 = 1000
 hidden_keep = .1
-input_keep = 1
+input_keep = .8
 lr = .001
 beta1 = .9
 beta2 = .95
@@ -28,8 +28,8 @@ madness_data = 'madness_avg.csv'
 madness = pd.read_csv(madness_data)
 #print madness.corr()
 
-#Train on 2013 and 2014 to predict 2015
-prediction_year = 2014
+#Train on every year but one, and predict that year
+prediction_year = 2015
 prior_year_mask = madness['Year'] != prediction_year
 trX, teX = madness[prior_year_mask], madness[~prior_year_mask]
 trY, teY = trX.pop('Performance'), teX.pop('Performance')
@@ -92,12 +92,6 @@ sess.run(init)
 #TRAINING#
 ##########
 
-test_error = []
-train_error = []
-prec = []
-rec = []
-f1 = []
-
 for i in range(steps):
 
     if i % 25 == 0:
@@ -130,21 +124,21 @@ def score_bracket(zipped):
         smaller = min(real,model)
         return (2**(smaller-2)) - 1
 
-    return sum([team_points(x[0],x[4]) for x in zipped])
+    return sum([team_points(x[3],x[4]) for x in zipped])
 
 predictions = sess.run(py_x,feed_dict={X:teX,p_keep_input: 1.0, p_keep_hidden: 1.0})
 
-#A zipped tuple has (Real, Model, Team, Seed)
-zipped = map(lambda x :(x[0][0],x[1][0],x[2],x[3]),zip(teY,predictions,test_teams,test_snake))
+#A zipped tuple has (Seed, Team, Model, Real)
+zipped = map(lambda x :(x[0],x[1],x[2][0],x[3][0]),zip(test_snake,test_teams,predictions,teY))
 
-sorted_by_prediction = sorted(zipped, key=lambda x:x[1])
-sorted_by_snake = sorted(zipped, key=lambda x:x[3])[::-1]
+sorted_by_prediction = sorted(zipped, key=lambda x:x[2])
+sorted_by_snake = sorted(zipped, key=lambda x:x[0],reverse=True)
 
 sorted_by_prediction = assign_points(sorted_by_prediction)
 sorted_by_snake = assign_points(sorted_by_snake)
 
-print "(Real, NetModel, Team, Snake, SnakePerf)", sorted_by_snake[::-1]
-print "(Real, NetModel, Team, Snake, NetPerf)", sorted_by_prediction[::-1]
+print "(Snake, Team, Model, Real, SnakePred)", sorted_by_snake[::-1]
+print "(Snake, Team, Model, Real, ModelPred)", sorted_by_prediction[::-1]
 
 print "Snake baseline score: ", score_bracket(sorted_by_snake)
 print "Neural net score: ", score_bracket(sorted_by_prediction)

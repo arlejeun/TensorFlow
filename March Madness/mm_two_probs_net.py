@@ -10,10 +10,10 @@ from scipy.stats import pearsonr
 #PARAMETERS#
 ############
 
-hidden_units = 5000
+hidden_units = 2500
 hidden_units2 = 1000
 hidden_keep = .1
-input_keep = 1
+input_keep = .8
 lr = .001
 beta1 = .9
 beta2 = .95
@@ -28,12 +28,24 @@ madness_data = 'madness_avg.csv'
 madness = pd.read_csv(madness_data)
 #print madness.corr()
 
-#Train on 2013 and 2014 to predict 2015
+#Train on every year but one, and predict that year
 prediction_year = 2014
 prior_year_mask = madness['Year'] != prediction_year
 trX, teX = madness[prior_year_mask], madness[~prior_year_mask]
-trY, teY = trX.pop('Performance'), teX.pop('Performance')
-trY, teY = np.reshape(trY, (len(trY),1)), np.reshape(teY, (len(teY),1))
+
+#Split to work with multiple probabilities. Assume 8 values mapped to 2.
+#Bucket teams into early losses, middle losses, and late losses
+#Splitting into all eight wasn't working, likely because we'd overfit champion predictions
+#Hopefully clumping final four contenders together will address this
+def split_y(y):
+    split = [0]*2
+    if y<=4: split[0] = 1   #Not elite   - 60 Teams per year
+    else: split[1] = 1      #Elite Eight - 8 Teams per year
+    return split
+
+train_perf, test_perf = trX.pop('Performance'), teX.pop('Performance')
+trY = [split_y(y) for y in train_perf]
+teY = [split_y(y) for y in test_perf]
 
 #Scale
 train_teams = trX.pop('Name')
@@ -44,7 +56,7 @@ trX = preprocessing.scale(trX)
 teX = preprocessing.scale(teX)
 
 feature_cols = 30
-output_vals = 1
+output_vals = 2
 
 ##############
 #ARCHITECTURE#
@@ -76,7 +88,8 @@ w_o =  init_weights([hidden_units2, output_vals])
 
 py_x = model(X, w_h, w_h2, w_o, p_keep_input, p_keep_hidden)
 
-cost = tf.nn.l2_loss(tf.sub(Y,py_x))
+cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(py_x,Y))
+predict_op = tf.nn.softmax(py_x)
 train_op = tf.train.AdamOptimizer(lr, beta1, beta2).minimize(cost)
 
 init = tf.initialize_all_variables()
@@ -92,19 +105,13 @@ sess.run(init)
 #TRAINING#
 ##########
 
-test_error = []
-train_error = []
-prec = []
-rec = []
-f1 = []
-
 for i in range(steps):
 
     if i % 25 == 0:
 
         test_feed = {X: teX, Y: teY, p_keep_input: 1.0, p_keep_hidden:1.0}
         train_feed = {X: trX, Y: trY, p_keep_input: 1.0, p_keep_hidden:1.0}
-        print sqrt(2*sess.run(cost,feed_dict=train_feed)/len(trX)), sqrt(2*sess.run(cost,feed_dict=test_feed)/len(teX))
+        print sess.run(cost,feed_dict=train_feed), sess.run(cost,feed_dict=test_feed)
 
     sess.run(train_op, feed_dict={X: trX, Y: trY, p_keep_input: input_keep, p_keep_hidden: hidden_keep})
 
@@ -130,21 +137,23 @@ def score_bracket(zipped):
         smaller = min(real,model)
         return (2**(smaller-2)) - 1
 
-    return sum([team_points(x[0],x[4]) for x in zipped])
+    return sum([team_points(x[3],x[4]) for x in zipped])
 
-predictions = sess.run(py_x,feed_dict={X:teX,p_keep_input: 1.0, p_keep_hidden: 1.0})
+#predict and normalize across teams
+predictions = sess.run(predict_op,feed_dict={X:teX,p_keep_input: 1.0, p_keep_hidden: 1.0})
 
-#A zipped tuple has (Real, Model, Team, Seed)
-zipped = map(lambda x :(x[0][0],x[1][0],x[2],x[3]),zip(teY,predictions,test_teams,test_snake))
+#A zipped tuple has (Seed, Team, Model, Real)
+average_round = [2,6]
+zipped = map(lambda x :(x[0],x[1],sum([average_round[i]*y for i,y in enumerate(x[2])]),x[3]),zip(test_snake,test_teams,predictions,test_perf))
 
-sorted_by_prediction = sorted(zipped, key=lambda x:x[1])
-sorted_by_snake = sorted(zipped, key=lambda x:x[3])[::-1]
+sorted_by_prediction = sorted(zipped, key=lambda x:x[2])
+sorted_by_snake = sorted(zipped, key=lambda x:x[0],reverse=True)
 
 sorted_by_prediction = assign_points(sorted_by_prediction)
 sorted_by_snake = assign_points(sorted_by_snake)
 
-print "(Real, NetModel, Team, Snake, SnakePerf)", sorted_by_snake[::-1]
-print "(Real, NetModel, Team, Snake, NetPerf)", sorted_by_prediction[::-1]
+print "(Snake, Team, Model, Real, SnakePred)", sorted_by_snake[::-1]
+print "(Snake, Team, Model, Real, ModelPred)", sorted_by_prediction[::-1]
 
 print "Snake baseline score: ", score_bracket(sorted_by_snake)
 print "Neural net score: ", score_bracket(sorted_by_prediction)
