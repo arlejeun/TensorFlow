@@ -1,61 +1,31 @@
-import pandas as pd
-import numpy as np
-from sklearn.cross_validation import train_test_split
-from sklearn import preprocessing
-import random
-from math import sqrt
 import tensorflow as tf
+from math import sqrt
 
 ############
 #PARAMETERS#
 ############
 
-training_pct = 75
-steps = 101
+steps = 51
 
-def main(hidden_units, input_keep, hidden_keep, lr, beta1, features):
-
-    #######
-    #SETUP#
-    #######
-
-    tab_data = 'carbapenem.k10'
-
-    #Too many columns for this machine, randomly select a subset
-    col_limit = features
-    col_total = 524684
-    skip_cols = [0]+random.sample(range(1,col_total), col_total-col_limit) #Always skip row 0
-    df = pd.read_csv(tab_data, sep='\t', skiprows=skip_cols, header=None)
-
-    # Transpose, relabel, and scale
-    amr_data_x = df.transpose()[1:]
-    feature_cols = len(amr_data_x.columns)
-    amr_data_x = preprocessing.scale(amr_data_x)
-
-    #Get targets and encode as integers
-    response_row = pd.read_csv(tab_data, sep='\t', nrows=1, header=None)
-    response_col = np.array(response_row.transpose()[1:])
-
-    #Format to work with multi-class classifier
-    def split_y(y):
-        if y == 1: return [0,1]
-        else: return [1,0] 
-
-    amr_data_y = np.array(map(split_y,response_col))
+def main(trX, teX, trY, teY, feature_cols, hidden_units, hidden_units2, input_keep, hidden_keep, lr, beta1):
 
     ##############
     #ARCHITECTURE#
     ##############
 
+    print "building"
+
     def init_weights(shape):
         return tf.Variable(tf.random_normal(shape) * 1./sqrt(shape[0]))
 
-    def model(X, w_h, w_o, p_drop_input, p_drop_hidden):
+    def model(X, w_h, w_h2, w_o, p_drop_input, p_drop_hidden):
         X = tf.nn.dropout(X, p_drop_input)
         h = tf.nn.relu(tf.matmul(X, w_h))
         h = tf.nn.dropout(h, p_drop_hidden)
+        h2 = tf.nn.relu(tf.matmul(h, w_h2))
+        h2 = tf.nn.dropout(h2, p_drop_hidden)
 
-        return tf.matmul(h, w_o)
+        return tf.matmul(h2, w_o)
 
     X = tf.placeholder("float", [None, feature_cols])
     Y = tf.placeholder("float", [None, 2])
@@ -64,13 +34,14 @@ def main(hidden_units, input_keep, hidden_keep, lr, beta1, features):
     p_keep_hidden = tf.placeholder("float")
 
     w_h =  init_weights([feature_cols, hidden_units])
-    w_o =  init_weights([hidden_units, 2])
+    w_h2 =  init_weights([hidden_units, hidden_units2])
+    w_o =  init_weights([hidden_units2, 2])
 
-    py_x = model(X, w_h, w_o, p_keep_input, p_keep_hidden)
+    py_x = model(X, w_h, w_h2, w_o, p_keep_input, p_keep_hidden)
 
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(py_x, Y))
     train_op = tf.train.AdamOptimizer(lr, beta1).minimize(cost)
-    predict_op = tf.argmax(py_x, 1)
+    predict_op = tf.nn.softmax(py_x)
 
     #############
     #TENSORBOARD#
@@ -106,7 +77,8 @@ def main(hidden_units, input_keep, hidden_keep, lr, beta1, features):
     #TRAINING#
     ##########
 
-    trX, teX, trY, teY = train_test_split(amr_data_x, amr_data_y, train_size=training_pct/100.0)
+    print "training"
+
     test_error = []
     train_error = []
     prec = []
@@ -115,7 +87,7 @@ def main(hidden_units, input_keep, hidden_keep, lr, beta1, features):
 
     for i in range(steps):
 
-        if i % 10 == 0:  # Record test/train error and other scores
+        if i % 5 == 0:  # Record test/train error and other scores
             test_feed = {X: teX, Y: teY, p_keep_input: 1.0, p_keep_hidden:1.0}
             train_feed = {X: trX, Y: trY, p_keep_input: 1.0, p_keep_hidden:1.0}
 
@@ -131,22 +103,12 @@ def main(hidden_units, input_keep, hidden_keep, lr, beta1, features):
             prec.append(float(precision_result))
             rec.append(float(recall_result))
             f1.append(float(f1_result))
+
+            print hidden_units, hidden_units2, i, train_result, test_result
         
         #Too few observations for full batch to be a problem
         sess.run(train_op, feed_dict={X: trX, Y: trY, p_keep_input: input_keep, p_keep_hidden: hidden_keep})
 
-    return {
-            'test_error':test_error,
-            'train_error':train_error, 
-            'Precision':prec, 
-            'Recall':rec, 
-            'F1':f1, 
-            'HU':hidden_units, 
-            'IK':input_keep, 
-            'HK':hidden_keep, 
-            'LR':lr, 
-            'Beta':beta1,
-            'feature_count':features
-            }
-
+    predictions = sess.run(predict_op, feed_dict=test_feed)
     sess.close()
+    return predictions
